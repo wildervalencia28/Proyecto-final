@@ -1,0 +1,66 @@
+service: proyecto-final
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  region: us-east-1
+
+resources:
+  Resources:
+    MyDatabase: 
+      Type: AWS::RDS::DBInstance
+      Properties:
+        AllocatedStorage: 20
+        DBInstanceClass: db.t2.micro
+        Engine: MySQL
+        EngineVersion: 5.7
+        MasterUsername: admin
+        MasterUserPassword: 12345678
+        MultiAZ: false
+        StorageType: gp2
+        PubliclyAccessible: true
+
+    MyOrderQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: order-queue
+        DelaySeconds: 15
+        MessageRetentionPeriod: 1209600
+
+    MyOrderBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: order-backup-bucket-proyecto-wilder
+        LifecycleConfiguration:
+          Rules:
+            - Id: DeleteAfterTwoDays
+              Status: Enabled
+              ExpirationInDays: 2
+
+  Outputs:
+    DatabaseEndpoint:
+      Value: !GetAtt MyDatabase.Endpoint.Address
+    DatabaseName:
+      Value: my-database
+
+functions:
+  createOrder:
+    handler: src/createOrder.handler
+    events:
+      - http:
+          path: orders
+          method: post
+
+  getOrder:
+    handler: src/getOrder.handler
+    events:
+      - http:
+          path: orders/{orderId}
+          method: get
+
+  processOrders:
+    handler: src/processOrders.handler
+    events:
+      - schedule: cron(0/15 * * * ? *)
